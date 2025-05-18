@@ -98,11 +98,11 @@ func (m *Mempool) HandleOwnBlock(block *OwnBlockMsg) error {
 	if uint64(len(m.Queue)) >= m.Parameters.MaxMempoolQueenSize {
 		return core.ErrFullMemory(m.Name)
 	}
-	//digest := block.Block.Hash()
+	digest := block.Block.Hash()
 	if err := m.payloadProcess(block.Block); err != nil {
 		return err
 	}
-	//m.Queue[digest] = struct{}{}
+	m.Queue[digest] = struct{}{}
 	return nil
 }
 
@@ -189,29 +189,38 @@ func (m *Mempool) HandleVerifyMsg(msg *VerifyBlockMsg) VerifyStatus {
 }
 
 func (m *Mempool) generateBlocks() error {
-	for {
-		block, _ := NewBlock(m.Name, m.TxPool.GetBatch(), m.SigService)
-		if block.Batch.ID != -1 {
-			logger.Info.Printf("create Block node %d batch_id %d \n", block.Proposer, block.Batch.ID)
-			ownmessage := &OwnBlockMsg{
-				Block: block,
-			}
-			m.Transimtor.MempololRecvChannel() <- ownmessage
-			break
+	block, _ := NewBlock(m.Name, m.TxPool.GetBatch(), m.SigService)
+	if block.Batch.ID != -1 {
+		logger.Info.Printf("create Block node %d batch_id %d \n", block.Proposer, block.Batch.ID)
+		ownmessage := &OwnBlockMsg{
+			Block: block,
 		}
+		m.Transimtor.MempololRecvChannel() <- ownmessage
 	}
+	// for {
+	// 	block, _ := NewBlock(m.Name, m.TxPool.GetBatch(), m.SigService)
+	// 	if block.Batch.ID != -1 {
+	// 		logger.Info.Printf("create Block node %d batch_id %d \n", block.Proposer, block.Batch.ID)
+	// 		ownmessage := &OwnBlockMsg{
+	// 			Block: block,
+	// 		}
+	// 		m.Transimtor.MempololRecvChannel() <- ownmessage
+	// 		break
+	// 	}
+	// }
 	return nil
 }
 
 func (m *Mempool) Run() {
-	//一直广播微区块
-	ticker := time.NewTicker(30 * time.Millisecond)
+	//一直广播微区块,这个时间设置需要和发块速率结合起来看，也就是rust版本里面实现的一收到一个batch就立马广播并且发块
+	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 	m.generateBlocks()
 
 	go m.Sync.Run()
 
 	//监听mempool的消息通道
+
 	mempoolrecvChannal := m.Transimtor.MempololRecvChannel()
 	connectrecvChannal := m.Transimtor.ConnectRecvChannel()
 	for {

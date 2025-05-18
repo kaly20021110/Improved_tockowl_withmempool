@@ -41,7 +41,7 @@ func Consensus(
 
 	//step1 .Invoke networl
 	addr := fmt.Sprintf(":%s", strings.Split(committee.Address(id), ":")[1])
-	cc := network.NewCodec(DefaultMessageTypeMap, mempool.DefaultMessageTypeMap) //消息类型注册表
+	cc := network.NewCodec(DefaultMessageTypeMap, mempool.DefaultMessageTypeMap)
 	sender := network.NewSender(cc)
 	go sender.Run()
 	receiver := network.NewReceiver(addr, cc)

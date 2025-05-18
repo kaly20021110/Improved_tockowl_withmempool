@@ -14,27 +14,33 @@ def extract_committed_digests(log_file):
 
 def compare_digest_sequences(log_files):
     """
-    比较多个 log 文件中的 Committed digest 序列是否完全一致。
+    比较多个 log 文件中的 committed digest 序列是否为最长序列的前缀。
     """
     digest_sequences = {}
     for log_file in log_files:
         digests = extract_committed_digests(log_file)
         digest_sequences[log_file] = digests
 
-    # 获取第一个文件的 digest 序列作为参考
-    ref_file, ref_digests = next(iter(digest_sequences.items()))
+    # 找出最长的 committed digest 序列作为参考
+    ref_file, ref_digests = max(digest_sequences.items(), key=lambda item: len(item[1]))
 
-    # 逐个比较其余文件的 digest 序列
+    # 逐个比较每个文件的序列是否是最长序列的前缀
+    all_match = True
     for file, digests in digest_sequences.items():
-        if digests != ref_digests:
-            print(f"文件 {file} 与 {ref_file} 的 committed digest 序列不一致。")
-            return False
-    print("所有文件的 committed digest 序列完全一致。")
-    return True
+        expected = ref_digests[:len(digests)]
+        if digests != expected:
+            print(f"文件 {file} 的 committed digest 序列不是 {ref_file} 的前缀。")
+            all_match = False
+        else:
+            print(f"文件 {file} 的 committed digest 序列是 {ref_file} 的前缀。")
+
+    return all_match
+
+
 
 if __name__ == '__main__':
     # 指定 logs 目录下的文件
-    log_dir = 'logs/2025-05-16v15-37-34'
+    log_dir = 'logs/2025-05-18v13-01-02'
     log_files = [
         os.path.join(log_dir, 'node-info-0.log'),
         os.path.join(log_dir, 'node-info-1.log'),

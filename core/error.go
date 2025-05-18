@@ -11,8 +11,8 @@ var (
 		return fmt.Errorf("[type-%d-round-%d-node-%d] not receive all block reference ", msgTyp, round, node)
 	}
 
-	ErrOneMoreMessage = func(msgTyp int, epoch, round int64, author NodeID) error {
-		return fmt.Errorf("[type-%d-epoch-%d-round-%d] receive one more message from %d ", msgTyp, epoch, round, author)
+	ErrOneMoreMessage = func(msgTyp int, epoch int64, author NodeID) error {
+		return fmt.Errorf("[type-%d-epoch-%d] receive one more message from %d ", msgTyp, epoch, author)
 	}
 
 	ErrFullMemory = func(author NodeID) error {

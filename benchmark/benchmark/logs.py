@@ -60,11 +60,11 @@ class LogParser:
         tmp = findall(r'\[INFO] (.*) pool.* Received Batch (\d+)', log)
         batchs = { id:self._to_posix(t) for t,id in tmp}
         
-        tmp = findall(r'\[INFO] (.*) core.* create ConsensusBlock (epoch \d+ proposer \d+)', log)
+        tmp = findall(r'\[INFO] (.*) core.* create ConsensusBlock (epoch \d+ node \d+)', log)
         tmp = { (id,self._to_posix(t)) for t,id in tmp }
         proposals = self._merge_results([tmp])
         
-        tmp = findall(r'\[INFO] (.*) core.* commit ConsensusBlock (epoch \d+ proposer \d+)', log)
+        tmp = findall(r'\[INFO] (.*) commitor.* commit ConsensusBlock (epoch \d+ node \d+)', log)
         tmp = [(id, self._to_posix(t)) for t, id in tmp]
         proposalcommits = self._merge_results([tmp])
 
@@ -105,7 +105,7 @@ class LogParser:
     def _consensus_throughput(self):
         if not self.commits:
             return 0, 0
-        start, end = min(self.proposals.values()), max(self.commits.values())
+        start, end = min(self.proposals.values()), max(self.proposalcommits.values())
         duration = end - start
         tps = len(self.commits)*self.configs['pool']['batch_size'] / duration
         return tps, duration
