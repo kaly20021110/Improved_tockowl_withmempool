@@ -30,6 +30,7 @@ func (c *Committor) Commit(block *ConsensusBlock) {
 	for _, b := range block.PayLoads {
 		if smallblock, err := c.Mempool.GetBlock(b); err == nil {
 			c.commitCh <- smallblock
+
 		}
 	}
 	logger.Info.Printf("commit ConsensusBlock epoch %d node %d\n", block.Epoch, block.Proposer)

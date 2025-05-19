@@ -40,7 +40,7 @@ def compare_digest_sequences(log_files):
 
 if __name__ == '__main__':
     # 指定 logs 目录下的文件
-    log_dir = 'logs/2025-05-18v13-01-02'
+    log_dir = 'logs/2025-05-19v09-51-03'
     log_files = [
         os.path.join(log_dir, 'node-info-0.log'),
         os.path.join(log_dir, 'node-info-1.log'),

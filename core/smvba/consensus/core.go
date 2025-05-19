@@ -11,17 +11,18 @@ import (
 )
 
 type Core struct {
-	Name       core.NodeID
-	Committee  core.Committee
-	Parameters core.Parameters
-	SigService *crypto.SigService
-	Store      *store.Store
-	TxPool     *pool.Pool
-	Transimtor *core.Transmitor
-	Aggreator  *Aggreator
-	Elector    *Elector
-	Commitor   *Committor
-	MemPool    *mempool.Mempool
+	Name            core.NodeID
+	Committee       core.Committee
+	Parameters      core.Parameters
+	SigService      *crypto.SigService
+	Store           *store.Store
+	TxPool          *pool.Pool
+	Transimtor      *core.Transmitor
+	Aggreator       *Aggreator
+	Elector         *Elector
+	Commitor        *Committor
+	MemPool         *mempool.Mempool
+	loopBackChannel chan crypto.Digest //从mempool部分获取到区块
 
 	FinishFlags   map[int64]map[core.NodeID]crypto.Digest // finish? map[epoch][node] = blockHash 完成了spb的两阶段的证明
 	SPbInstances  map[int64]map[core.NodeID]*SPB          // map[epoch][node]
@@ -68,6 +69,7 @@ func NewCore(
 		Elector:           NewElector(SigService, Committee),
 		Commitor:          NewCommittor(callBack, pool),
 		MemPool:           pool,
+		loopBackChannel:   loopBackchannel,
 		FinishFlags:       make(map[int64]map[core.NodeID]crypto.Digest),
 		SPbInstances:      make(map[int64]map[core.NodeID]*SPB),
 		abaInstances:      make(map[int64]map[int64]*ABA), //针对index序列的ABA
@@ -228,6 +230,26 @@ func (c *Core) generatorBlock(epoch int64) *ConsensusBlock {
 	return consensusblock
 }
 
+// 检查当前区块的所有payload是否都已经收到
+func (c *Core) verifyConsensusBlock(block *ConsensusBlock) bool {
+	verifychan := make(chan mempool.VerifyStatus)
+	msg := &mempool.VerifyBlockMsg{
+		Proposer:           block.Proposer, //提块的人
+		Epoch:              block.Epoch,
+		Payloads:           block.PayLoads,
+		ConsensusBlockHash: block.Hash(),
+		Sender:             verifychan,
+	}
+	c.Transimtor.ConnectRecvChannel() <- msg
+	//获取当前区块的状态
+	verifystatus := <-verifychan
+	if verifystatus == mempool.OK {
+		return true
+	} else {
+		return false
+	}
+}
+
 /*********************************** Protocol Start***************************************/
 func (c *Core) handleSpbProposal(p *SPBProposal) error {
 	logger.Debug.Printf("Processing SPBProposal proposer %d epoch %d phase %d\n", p.Author, p.Epoch, p.Phase)
@@ -240,7 +262,20 @@ func (c *Core) handleSpbProposal(p *SPBProposal) error {
 			logger.Error.Printf("Store Block error: %v\n", err)
 			return err
 		}
+		//如果是第一次收到区块先检查payloads,会有小部分人没有收到相关区块
+		if ok := c.verifyConsensusBlock(p.B); !ok {
+			logger.Debug.Printf("checkreferrence error and try to retriver Author %d Epoch %d lenof Reference %d\n", p.Author, p.Epoch, len(p.B.PayLoads))
+			//向mempool要所有的微区块
+			message := &mempool.RequestBlockMsg{
+				Type:    0,
+				Digests: p.B.PayLoads,
+				Author:  c.Name,
+			}
+			c.Transimtor.ConnectRecvChannel() <- message
+			return nil
+		}
 	}
+
 	if p.Phase == SPB_ONE_PHASE {
 		if c.VisitLockFlag(p.Epoch, p.Author) { //暂停第一轮的投票聚合
 			logger.Debug.Printf("already send message as lock ,can not continue to vote for finish epoch %d author %d\n", p.Epoch, p.Author)
@@ -639,6 +674,7 @@ func (c *Core) handleHelpSkip(skip *HelpSkip) error {
 	if c.judgeCommit(skip.Epoch, c.ParallelABAIndex+1) {
 		leader := c.Elector.GetLeader(skip.Epoch, c.ParallelABAIndex+1)
 		instance := c.getSpbInstance(skip.Epoch, leader)
+		//ERROR 可能获取不到对应的区块，这里会有问题，需要修改，如果没有获取到会怎么办?至少需要找人去拿到这个块或者这个块的哈希
 		var blockhash crypto.Digest = instance.GetBlockHash().(crypto.Digest) //这个地方可能逻辑处理有问题，遇到一些情况，这个blockhash可能获取不到
 		return c.handleOutput(skip.Epoch, blockhash)
 	}
@@ -652,6 +688,18 @@ func (c *Core) handleHelpCommit(help *HelpCommit) error {
 	logger.Debug.Printf("handle help commit message epoch %d\n", help.Epoch)
 	c.Commitor.Commit(help.B)
 	c.advanceNextEpoch(help.Epoch + 1)
+	return nil
+}
+
+func (c *Core) handleLoopBack(blockhash crypto.Digest) error {
+	if block, err := c.getConsensusBlock(blockhash); err != nil {
+		logger.Error.Printf("loopback error\n")
+		return err
+	} else {
+		logger.Debug.Printf("procesing block loop back round %d node %d \n", block.Epoch, block.Proposer)
+		proposal, _ := NewSPBProposal(block.Proposer, block, block.Epoch, SPB_ONE_PHASE, nil, c.SigService)
+		go c.getSpbInstance(proposal.Epoch, proposal.Author).processProposal(proposal)
+	}
 	return nil
 }
 
@@ -726,6 +774,10 @@ func (c *Core) Run() {
 					err = c.handleABAHalt(msg.(*ABAHalt))
 
 				}
+			}
+		case block := <-c.loopBackChannel:
+			{
+				err = c.handleLoopBack(block)
 			}
 		case abaBack := <-c.abaCallBack:
 			err = c.processABABack(abaBack)

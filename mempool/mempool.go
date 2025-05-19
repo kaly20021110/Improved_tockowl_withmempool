@@ -213,7 +213,7 @@ func (m *Mempool) generateBlocks() error {
 
 func (m *Mempool) Run() {
 	//一直广播微区块,这个时间设置需要和发块速率结合起来看，也就是rust版本里面实现的一收到一个batch就立马广播并且发块
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(5 * time.Millisecond)
 	defer ticker.Stop()
 	m.generateBlocks()
 
