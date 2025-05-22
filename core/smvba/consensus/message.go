@@ -11,7 +11,7 @@ import (
 	"strconv"
 )
 
-const MAXCOUNT int64 = 1000
+const MAXCOUNT int64 = 500
 const (
 	SPB_ONE_PHASE int8 = iota
 	SPB_TWO_PHASE

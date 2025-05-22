@@ -31,10 +31,10 @@ func NewTransmitor(
 	tr := &Transmitor{
 		sender:     sender,
 		receiver:   receiver,
-		mempoolCh:  make(chan Messgae, 1_000),
-		connectCh:  make(chan Messgae, 1_000),
-		recvCh:     make(chan Messgae, 1_000),
-		msgCh:      make(chan *network.NetMessage, 1_000),
+		mempoolCh:  make(chan Messgae, 10_000),
+		connectCh:  make(chan Messgae, 10_000),
+		recvCh:     make(chan Messgae, 10_000),
+		msgCh:      make(chan *network.NetMessage, 10_000),
 		parameters: parameters,
 		committee:  committee,
 	}
@@ -53,7 +53,7 @@ func NewTransmitor(
 			case "consensus":
 				tr.recvCh <- msg
 			case "connect":
-				tr.recvCh <- msg
+				tr.connectCh <- msg
 			default:
 				logger.Warn.Printf("Unknown module %s", msg.Module())
 			}

@@ -19,7 +19,7 @@ type Sender struct {
 
 func NewSender(cc *Codec) *Sender {
 	sender := &Sender{
-		msgCh: make(chan *NetMessage, 1000),
+		msgCh: make(chan *NetMessage, 10_000),
 		conns: make(map[string]chan<- Messgae),
 		cc:    cc,
 	}
@@ -83,7 +83,7 @@ func NewReceiver(addr string, cc *Codec) *Receiver {
 
 	receiver := &Receiver{
 		addr: addr,
-		msg:  make(chan Messgae, 1000),
+		msg:  make(chan Messgae, 10_000),
 		cc:   cc,
 	}
 

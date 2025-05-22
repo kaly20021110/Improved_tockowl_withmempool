@@ -89,7 +89,6 @@ func (m *Mempool) payloadProcess(block *Block) error {
 		Block: block,
 	}
 	m.Transimtor.Send(m.Name, core.NONE, message)
-	m.Transimtor.MempololRecvChannel() <- message
 	return nil
 }
 
@@ -110,6 +109,7 @@ func (m *Mempool) HandleOthorBlock(block *OtherBlockMsg) error {
 	//m.generateBlocks()
 	//logger.Debug.Printf("handle mempool otherBlockMsg\n")
 	if uint64(len(m.Queue)) >= m.Parameters.MaxMempoolQueenSize {
+		logger.Error.Printf("ErrFullMemory\n")
 		return core.ErrFullMemory(m.Name)
 	}
 
@@ -117,6 +117,10 @@ func (m *Mempool) HandleOthorBlock(block *OtherBlockMsg) error {
 	// Verify that the payload is correctly signed.
 	if flag := block.Block.Verify(m.Committee); !flag {
 		logger.Error.Printf("Block sign error\n")
+		return nil
+	}
+	//如果已经存储了就舍弃
+	if _, err := m.GetBlock(block.Block.Hash()); err == nil {
 		return nil
 	}
 	if err := m.StoreBlock(block.Block); err != nil {
@@ -135,7 +139,8 @@ func (m *Mempool) HandleRequestBlock(request *RequestBlockMsg) error {
 			message := &OtherBlockMsg{
 				Block: b,
 			}
-			m.Transimtor.Send(m.Name, request.Author, message) //只发给向自己要的人
+			//m.Transimtor.Send(m.Name, request.Author, message) //只发给向自己要的人
+			m.Transimtor.Send(m.Name, core.NONE, message) //发给所有人
 		}
 	}
 	return nil
@@ -144,6 +149,7 @@ func (m *Mempool) HandleRequestBlock(request *RequestBlockMsg) error {
 // 获取共识区块所引用的微区块
 func (m *Mempool) HandleMakeBlockMsg(makemsg *MakeConsensusBlockMsg) ([]crypto.Digest, error) {
 	//nums := makemsg.MaxBlockSize / uint64(len(crypto.Digest{}))
+
 	nums := makemsg.MaxBlockSize
 	ret := make([]crypto.Digest, 0)
 	if len(m.Queue) == 0 {
@@ -197,36 +203,25 @@ func (m *Mempool) generateBlocks() error {
 		}
 		m.Transimtor.MempololRecvChannel() <- ownmessage
 	}
-	// for {
-	// 	block, _ := NewBlock(m.Name, m.TxPool.GetBatch(), m.SigService)
-	// 	if block.Batch.ID != -1 {
-	// 		logger.Info.Printf("create Block node %d batch_id %d \n", block.Proposer, block.Batch.ID)
-	// 		ownmessage := &OwnBlockMsg{
-	// 			Block: block,
-	// 		}
-	// 		m.Transimtor.MempololRecvChannel() <- ownmessage
-	// 		break
-	// 	}
-	// }
 	return nil
 }
 
 func (m *Mempool) Run() {
-	//一直广播微区块,这个时间设置需要和发块速率结合起来看，也就是rust版本里面实现的一收到一个batch就立马广播并且发块
-	ticker := time.NewTicker(5 * time.Millisecond)
+	//一直广播微区块
+	ticker := time.NewTicker(1000 * time.Microsecond)
 	defer ticker.Stop()
 	m.generateBlocks()
 
 	go m.Sync.Run()
 
 	//监听mempool的消息通道
-
 	mempoolrecvChannal := m.Transimtor.MempololRecvChannel()
 	connectrecvChannal := m.Transimtor.ConnectRecvChannel()
 	for {
 		var err error
 		select {
 		case <-ticker.C:
+			logger.Debug.Printf("ticker triggered at %s", time.Now().Format(time.RFC3339Nano))
 			err = m.generateBlocks()
 		case msg := <-connectrecvChannal:
 			{
@@ -236,6 +231,7 @@ func (m *Mempool) Run() {
 						req, _ := msg.(*MakeConsensusBlockMsg)
 						data, errors := m.HandleMakeBlockMsg(req)
 						req.Blocks <- data //把引用传进去了，具体使用的时候要注意,这一步要传递到哪里去？
+						logger.Debug.Printf("send data to consensus\n")
 						err = errors
 					}
 				case VerifyBlockType:

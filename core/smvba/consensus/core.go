@@ -24,18 +24,20 @@ type Core struct {
 	MemPool         *mempool.Mempool
 	loopBackChannel chan crypto.Digest //从mempool部分获取到区块
 
-	FinishFlags   map[int64]map[core.NodeID]crypto.Digest // finish? map[epoch][node] = blockHash 完成了spb的两阶段的证明
-	SPbInstances  map[int64]map[core.NodeID]*SPB          // map[epoch][node]
-	abaInstances  map[int64]map[int64]*ABA                //map[epoch]map[index] index可以计算出leader
-	LockSetMap    map[int64]map[core.NodeID]bool          //epoch -node lock 是否已经收到了lock
-	LockFlag      map[int64]map[core.NodeID]struct{}      //SPB里面的第一轮投票需要停掉
-	Lockmu        sync.RWMutex
-	FinishFlag    map[int64]map[core.NodeID]struct{} //SPB里面的第二轮投票需要停掉
-	Finishmu      sync.RWMutex
-	SkipFlag      map[int64]map[core.NodeID]struct{} //这个leader已经被跳过了，如果需要抉择下一个leader必须等前面所有的leader都完成
-	Skipmu        sync.RWMutex
-	abaInvokeFlag map[int64]map[int64]map[int64]map[uint8]struct{} //aba invoke flag
-	Epoch         int64
+	FinishFlags         map[int64]map[core.NodeID]crypto.Digest // finish? map[epoch][node] = blockHash 完成了spb的两阶段的证明
+	SPbInstances        map[int64]map[core.NodeID]*SPB          // map[epoch][node]
+	abaInstances        map[int64]map[int64]*ABA                //map[epoch]map[index] index可以计算出leader
+	LockSetMap          map[int64]map[core.NodeID]bool          //epoch -node lock 是否已经收到了lock
+	LockFlag            map[int64]map[core.NodeID]struct{}      //SPB里面的第一轮投票需要停掉
+	Lockmu              sync.RWMutex
+	FinishFlag          map[int64]map[core.NodeID]struct{} //SPB里面的第二轮投票需要停掉
+	Finishmu            sync.RWMutex
+	SkipFlag            map[int64]map[core.NodeID]struct{} //这个leader已经被跳过了，如果需要抉择下一个leader必须等前面所有的leader都完成
+	Skipmu              sync.RWMutex
+	abaInvokeFlag       map[int64]map[int64]map[int64]map[uint8]struct{} //aba invoke flag
+	Epoch               int64
+	CommitEpoch         int64
+	BlocksWaitforCommit map[int64]*ConsensusBlock
 	//LeaderIndex      map[int64]int           //epoch index epoch+index可以用来选leader
 	ParallelABAResult map[int64]map[int]uint8 //epoch - index -ABA结果
 	ParallelABAIndex  int                     //最后一个并行序列
@@ -56,14 +58,16 @@ func NewCore(
 	Sync := mempool.NewSynchronizer(Name, Transimtor, loopBackchannel, Store)
 	pool := mempool.NewMempool(Name, Committee, Parameters, SigService, Store, TxPool, Transimtor, Sync)
 	c := &Core{
-		Name:       Name,
-		Committee:  Committee,
-		Parameters: Parameters,
-		SigService: SigService,
-		Store:      Store,
-		TxPool:     TxPool,
-		Transimtor: Transimtor,
-		Epoch:      0,
+		Name:                Name,
+		Committee:           Committee,
+		Parameters:          Parameters,
+		SigService:          SigService,
+		Store:               Store,
+		TxPool:              TxPool,
+		Transimtor:          Transimtor,
+		Epoch:               0,
+		CommitEpoch:         0,
+		BlocksWaitforCommit: make(map[int64]*ConsensusBlock),
 		//LeaderIndex:       make(map[int64]int),
 		Aggreator:         NewAggreator(Committee, SigService),
 		Elector:           NewElector(SigService, Committee),
@@ -227,6 +231,8 @@ func (c *Core) generatorBlock(epoch int64) *ConsensusBlock {
 	payloads := <-referencechan
 	consensusblock := NewConsensusBlock(c.Name, payloads, epoch)
 	logger.Info.Printf("create ConsensusBlock epoch %d node %d\n", consensusblock.Epoch, consensusblock.Proposer)
+
+	logger.Info.Printf("create ConsensusBlock epoch %d node %d paloads %d\n", consensusblock.Epoch, consensusblock.Proposer, len(consensusblock.PayLoads))
 	return consensusblock
 }
 
@@ -264,14 +270,7 @@ func (c *Core) handleSpbProposal(p *SPBProposal) error {
 		}
 		//如果是第一次收到区块先检查payloads,会有小部分人没有收到相关区块
 		if ok := c.verifyConsensusBlock(p.B); !ok {
-			logger.Debug.Printf("checkreferrence error and try to retriver Author %d Epoch %d lenof Reference %d\n", p.Author, p.Epoch, len(p.B.PayLoads))
-			//向mempool要所有的微区块
-			message := &mempool.RequestBlockMsg{
-				Type:    0,
-				Digests: p.B.PayLoads,
-				Author:  c.Name,
-			}
-			c.Transimtor.ConnectRecvChannel() <- message
+			logger.Error.Printf("checkreferrence error and try to retriver Author %d Epoch %d lenof Reference %d\n", p.Author, p.Epoch, len(p.B.PayLoads))
 			return nil
 		}
 	}
@@ -422,13 +421,29 @@ func (c *Core) processLeader(epoch int64) error {
 			if b, err := c.getConsensusBlock(value); err != nil {
 				return err
 			} else if b != nil {
-				c.Commitor.Commit(b) //如果这个值获得了finish那么直接commit并且帮助别人commit  要不要加一个commitflag呢？
+				if ok := c.verifyConsensusBlock(b); !ok {
+					logger.Error.Printf("checkreferrence error and try to retriver Author %d Epoch %d lenof Reference %d\n", b.Proposer, b.Epoch, len(b.PayLoads))
+					c.BlocksWaitforCommit[b.Epoch] = b
+					return nil
+				} else {
+					c.BlocksWaitforCommit[b.Epoch] = b
+					c.CommitAllBlocks()
+					// c.Commitor.Commit(b)
+					// msg := &mempool.CleanBlockMsg{
+					// 	Digests: b.PayLoads,
+					// 	Epoch:   b.Epoch,
+					// }
+					// c.Transimtor.ConnectRecvChannel() <- msg
+					// c.CommitEpoch = b.Epoch + 1
+				}
+				//如果这个值获得了finish那么直接commit并且帮助别人commit  要不要加一个commitflag呢？
+
 				logger.Debug.Printf("help commit message leader %d epoch %d \n", leaderid, epoch)
 				help, _ := NewHelpCommit(c.Name, leaderid, epoch, b, c.SigService)
 				c.Transimtor.Send(c.Name, core.NONE, help)
 				c.Transimtor.RecvChannel() <- help //不用发给自己
 				//进入下一个epoch
-				c.advanceNextEpoch(epoch + 1)
+				//c.advanceNextEpoch(epoch + 1)
 			} else {
 				logger.Debug.Printf("Processing retriever epoch %d \n", epoch) //这个部分真的实现了吗
 			}
@@ -448,7 +463,14 @@ func (c *Core) processLeader(epoch int64) error {
 				c.SkipFlag[epoch] = make(map[core.NodeID]struct{})
 			}
 			c.SkipFlag[epoch][abaleader] = struct{}{}
+			//ERROR 修改之处 这个地方修改了会出现空指针
+			if c.ParallelABAResult == nil {
+				c.ParallelABAResult = make(map[int64]map[int]uint8)
+			}
 
+			if _, ok := c.ParallelABAResult[epoch]; !ok {
+				c.ParallelABAResult[epoch] = make(map[int]uint8)
+			}
 			c.ParallelABAResult[epoch][i] = uint8(0)
 			//帮助所有人skip
 			skip, _ := NewHelpSkip(c.Name, abaleader, epoch, int(i), c.SigService)
@@ -502,11 +524,30 @@ func (c *Core) handleOutput(epoch int64, blockHash crypto.Digest) error {
 	if b, err := c.getConsensusBlock(blockHash); err != nil {
 		return err
 	} else if b != nil {
-		c.Commitor.Commit(b)
+		if ok := c.verifyConsensusBlock(b); !ok {
+			c.BlocksWaitforCommit[b.Epoch] = b
+			logger.Error.Printf("checkreferrence error and try to retriver Author %d Epoch %d lenof Reference %d\n", b.Proposer, b.Epoch, len(b.PayLoads))
+			return nil
+		} else {
+			c.BlocksWaitforCommit[b.Epoch] = b
+			c.CommitAllBlocks()
+			// c.Commitor.Commit(b)
+			// msg := &mempool.CleanBlockMsg{
+			// 	Digests: b.PayLoads,
+			// 	Epoch:   b.Epoch,
+			// }
+			// c.Transimtor.ConnectRecvChannel() <- msg
+			// c.CommitEpoch = b.Epoch + 1
+		}
+		//c.Commitor.Commit(b)
+
+		help, _ := NewHelpCommit(c.Name, b.Proposer, epoch, b, c.SigService)
+		c.Transimtor.Send(c.Name, core.NONE, help)
+		c.Transimtor.RecvChannel() <- help //不用发给自己
 	} else {
 		logger.Debug.Printf("Processing retriever epoch %d \n", epoch)
 	}
-	c.advanceNextEpoch(epoch + 1)
+	//c.advanceNextEpoch(epoch + 1)
 	return nil
 }
 
@@ -644,16 +685,26 @@ func (c *Core) processABABack(back *ABABack) error {
 			if c.judgeCommit(back.Epoch, c.ParallelABAIndex+1) {
 				leader := c.Elector.GetLeader(back.Epoch, c.ParallelABAIndex+1)
 				instance := c.getSpbInstance(back.Epoch, leader)
-				var blockhash crypto.Digest = instance.GetBlockHash().(crypto.Digest)
-				return c.handleOutput(back.Epoch, blockhash)
+				if instance.GetBlockHash() == nil {
+					logger.Error.Printf("judgeCommitOK but instance.getBlockHashError TYPE1\n")
+				} else {
+					//ERROR 可能获取不到对应的区块，这里会有问题，需要修改，如果没有获取到会怎么办?至少需要找人去拿到这个块或者这个块的哈希
+					var blockhash crypto.Digest = instance.GetBlockHash().(crypto.Digest) //这个地方可能逻辑处理有问题，遇到一些情况，这个blockhash可能获取不到
+					return c.handleOutput(back.Epoch, blockhash)
+				}
 			}
 			//return c.invokeNextLeader(back.Epoch, back.ExRound)
 		} else if back.Flag == FLAG_YES { //如果可以提交直接提交，//nextepoch
 			c.ParallelABAResult[back.Epoch][int(back.ExRound)] = uint8(1)
 			if c.judgeCommit(back.Epoch, int(back.ExRound)) {
 				instance := c.getSpbInstance(back.Epoch, back.Leader)
-				var blockhash crypto.Digest = instance.GetBlockHash().(crypto.Digest)
-				return c.handleOutput(back.Epoch, blockhash)
+				if instance.GetBlockHash() == nil {
+					logger.Error.Printf("judgeCommitOK but instance.getBlockHashError TYPE2\n")
+				} else {
+					//ERROR 可能获取不到对应的区块，这里会有问题，需要修改，如果没有获取到会怎么办?至少需要找人去拿到这个块或者这个块的哈希
+					var blockhash crypto.Digest = instance.GetBlockHash().(crypto.Digest) //这个地方可能逻辑处理有问题，遇到一些情况，这个blockhash可能获取不到
+					return c.handleOutput(back.Epoch, blockhash)
+				}
 			}
 		}
 	}
@@ -674,9 +725,14 @@ func (c *Core) handleHelpSkip(skip *HelpSkip) error {
 	if c.judgeCommit(skip.Epoch, c.ParallelABAIndex+1) {
 		leader := c.Elector.GetLeader(skip.Epoch, c.ParallelABAIndex+1)
 		instance := c.getSpbInstance(skip.Epoch, leader)
-		//ERROR 可能获取不到对应的区块，这里会有问题，需要修改，如果没有获取到会怎么办?至少需要找人去拿到这个块或者这个块的哈希
-		var blockhash crypto.Digest = instance.GetBlockHash().(crypto.Digest) //这个地方可能逻辑处理有问题，遇到一些情况，这个blockhash可能获取不到
-		return c.handleOutput(skip.Epoch, blockhash)
+		if instance.GetBlockHash() == nil {
+			logger.Error.Printf("judgeCommitOK but instance.getBlockHashError because has not receive the block\n")
+		} else {
+			//ERROR 可能获取不到对应的区块，这里会有问题，需要修改，如果没有获取到会怎么办?至少需要找人去拿到这个块或者这个块的哈希
+			var blockhash crypto.Digest = instance.GetBlockHash().(crypto.Digest) //这个地方可能逻辑处理有问题，遇到一些情况，这个blockhash可能获取不到
+			return c.handleOutput(skip.Epoch, blockhash)
+		}
+
 	}
 	return nil
 }
@@ -686,9 +742,41 @@ func (c *Core) handleHelpCommit(help *HelpCommit) error {
 		return nil
 	}
 	logger.Debug.Printf("handle help commit message epoch %d\n", help.Epoch)
-	c.Commitor.Commit(help.B)
-	c.advanceNextEpoch(help.Epoch + 1)
+	if ok := c.verifyConsensusBlock(help.B); !ok {
+		logger.Error.Printf("checkreferrence error and try to retriver Author %d Epoch %d lenof Reference %d\n", help.B.Proposer, help.B.Epoch, len(help.B.PayLoads))
+		c.BlocksWaitforCommit[help.B.Epoch] = help.B
+		return nil
+	} else {
+		if _, ok := c.BlocksWaitforCommit[help.B.Epoch]; !ok {
+			c.BlocksWaitforCommit[help.B.Epoch] = help.B
+		}
+		c.CommitAllBlocks()
+	}
+	//c.advanceNextEpoch(help.Epoch + 1)
 	return nil
+}
+
+func (c *Core) CommitAllBlocks() {
+	commitEpoch := c.CommitEpoch
+	for i := commitEpoch; i <= c.Epoch; i++ {
+		if block, ok := c.BlocksWaitforCommit[i]; ok {
+			if flag := c.verifyConsensusBlock(block); flag {
+				c.Commitor.Commit(block)
+				delete(c.BlocksWaitforCommit, i)
+				c.CommitEpoch = block.Epoch + 1
+				msg := &mempool.CleanBlockMsg{
+					Digests: block.PayLoads,
+					Epoch:   block.Epoch,
+				}
+				c.Transimtor.ConnectRecvChannel() <- msg
+				c.advanceNextEpoch(i + 1)
+			} else {
+				break
+			}
+		} else {
+			break
+		}
+	}
 }
 
 func (c *Core) handleLoopBack(blockhash crypto.Digest) error {
@@ -696,6 +784,9 @@ func (c *Core) handleLoopBack(blockhash crypto.Digest) error {
 		logger.Error.Printf("loopback error\n")
 		return err
 	} else {
+		if block == c.BlocksWaitforCommit[block.Epoch] {
+			c.CommitAllBlocks()
+		}
 		logger.Debug.Printf("procesing block loop back round %d node %d \n", block.Epoch, block.Proposer)
 		proposal, _ := NewSPBProposal(block.Proposer, block, block.Epoch, SPB_ONE_PHASE, nil, c.SigService)
 		go c.getSpbInstance(proposal.Epoch, proposal.Author).processProposal(proposal)
