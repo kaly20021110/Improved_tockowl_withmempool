@@ -74,7 +74,7 @@ def compare_digest_sequences(log_files):
     return all_match
 
 if __name__ == '__main__':
-    log_dir = 'logs/2025-05-22v22-18-31'
+    log_dir = 'logs/2025-05-23v09-55-59'
     log_files = [
         os.path.join(log_dir, 'node-info-0.log'),
         os.path.join(log_dir, 'node-info-1.log'),

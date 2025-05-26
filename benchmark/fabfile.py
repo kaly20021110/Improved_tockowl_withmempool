@@ -13,8 +13,8 @@ def local(ctx):
     ''' Run benchmarks on localhost '''
     bench_params = {
         'nodes': 4,
-        'duration': 30,
-        'rate': 15_000,                  # tx send rate
+        'duration': 20,
+        'rate': 25_000,                  # tx send rate
         'batch_size': 200,              # the max number of tx that can be hold 
         'log_level': 0b1111,            # 0x1 infolevel 0x2 debuglevel 0x4 warnlevel 0x8 errorlevel
         'protocol': "sMVBA"

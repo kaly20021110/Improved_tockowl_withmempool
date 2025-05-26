@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bft/mvba/logger"
 	"errors"
 )
 
@@ -27,9 +28,9 @@ type storeReq struct {
 	Done chan *storeReq
 }
 
-func (r *storeReq) done() {
-	r.Done <- r
-}
+// func (r *storeReq) done() {
+// 	r.Done <- r
+// }
 
 type Store struct {
 	db    DB
@@ -50,13 +51,12 @@ func NewStore(db DB) *Store {
 					val, err := s.db.Get(req.key)
 					req.val = val
 					req.err = err
-					req.Done <- req //提醒说这个请求已经正确存进去了，结束了
+					req.Done <- req
 				}
 			case WRITE:
 				{
 					//req.err = store.WRITE(req.key, req.val)
 					req.err = s.db.Put(req.key, req.val)
-					req.Done <- req
 					//写进去并且唤醒所有正在等待的人
 					if queue, ok := pending[string(req.key)]; ok { //如果有等待的队列消息
 						for _, r := range queue {
@@ -65,6 +65,7 @@ func NewStore(db DB) *Store {
 						}
 						delete(pending, string(req.key))
 					}
+					req.Done <- req
 				}
 			case NOTIFYREAD:
 				{
@@ -72,6 +73,7 @@ func NewStore(db DB) *Store {
 						req.val = val
 						req.Done <- req
 					} else {
+						logger.Warn.Printf("len of pending queue of payload req.key is %d\n", len(pending)+1)
 						queue := pending[string(req.key)]
 						queue = append(queue, req)
 						pending[string(req.key)] = queue

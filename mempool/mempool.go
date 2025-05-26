@@ -185,7 +185,7 @@ func (m *Mempool) HandleCleanBlock(msg *CleanBlockMsg) error {
 	for _, digest := range msg.Digests {
 		delete(m.Queue, digest)
 	}
-	//同步其他节点清理删除payload
+	//同步清楚某个epoch之前的所有请求
 	m.Sync.Cleanup(uint64(msg.Epoch))
 	return nil
 }

@@ -784,8 +784,11 @@ func (c *Core) handleLoopBack(blockhash crypto.Digest) error {
 		logger.Error.Printf("loopback error\n")
 		return err
 	} else {
-		if block == c.BlocksWaitforCommit[block.Epoch] {
-			c.CommitAllBlocks()
+		if b, exist := c.BlocksWaitforCommit[block.Epoch]; exist {
+			if block.Epoch == b.Epoch && block.Proposer == b.Proposer {
+				logger.Debug.Printf("commit all blocks when handle loopback\n")
+				c.CommitAllBlocks()
+			}
 		}
 		logger.Debug.Printf("procesing block loop back round %d node %d \n", block.Epoch, block.Proposer)
 		proposal, _ := NewSPBProposal(block.Proposer, block, block.Epoch, SPB_ONE_PHASE, nil, c.SigService)

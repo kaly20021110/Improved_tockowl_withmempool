@@ -65,11 +65,11 @@ class LogParser:
         proposals = self._merge_results([tmp])
         
         tmp = findall(r'\[INFO] (.*) commitor.* commit ConsensusBlock (epoch \d+ node \d+)', log)
-        tmp = [(id, self._to_posix(t)) for t, id in tmp]
+        tmp = {(id, self._to_posix(t)) for t, id in tmp}
         proposalcommits = self._merge_results([tmp])
 
         tmp = findall(r'\[INFO] (.*) commitor.* commit Block node \d+ batch_id (\d+)', log)
-        tmp = [(id, self._to_posix(t)) for t, id in tmp]
+        tmp = {(id, self._to_posix(t)) for t, id in tmp}
         commits = self._merge_results([tmp])
 
 
