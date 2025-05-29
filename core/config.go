@@ -18,6 +18,7 @@ type Parameters struct {
 	RetryDelay          int    `json:"retry_delay"`
 	Protocol            int    `json:"protocol"`
 	MaxMempoolQueenSize uint64 `json:"maxmempoolqueensize"`
+	PayloadSize         int    `json:"payload_size"`
 }
 
 var DefaultParameters = Parameters{
@@ -29,6 +30,7 @@ var DefaultParameters = Parameters{
 	RetryDelay:          5_000,
 	Protocol:            SMVBA,
 	MaxMempoolQueenSize: 10_000,
+	PayloadSize:         500,
 }
 
 type NodeID int

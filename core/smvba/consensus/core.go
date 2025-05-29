@@ -212,7 +212,7 @@ func (c *Core) getABAStopInstance(epoch int64) (int, core.NodeID) {
 		leader := c.Elector.GetLeader(epoch, i)
 		if check, _ := c.hasFinish(epoch, leader); check {
 			if i == 0 {
-				return -1, leader
+				return -1, leader //直接commit
 			} else {
 				leader = c.Elector.GetLeader(epoch, i-1)
 				return i - 1, leader
@@ -225,7 +225,7 @@ func (c *Core) getABAStopInstance(epoch int64) (int, core.NodeID) {
 func (c *Core) generatorBlock(epoch int64) *ConsensusBlock {
 	referencechan := make(chan []crypto.Digest)
 	msg := &mempool.MakeConsensusBlockMsg{
-		MaxBlockSize: uint64(MAXCOUNT), Blocks: referencechan,
+		MaxBlockSize: c.Parameters.PayloadSize, Blocks: referencechan,
 	}
 	c.Transimtor.ConnectRecvChannel() <- msg
 	payloads := <-referencechan
@@ -428,22 +428,10 @@ func (c *Core) processLeader(epoch int64) error {
 				} else {
 					c.BlocksWaitforCommit[b.Epoch] = b
 					c.CommitAllBlocks()
-					// c.Commitor.Commit(b)
-					// msg := &mempool.CleanBlockMsg{
-					// 	Digests: b.PayLoads,
-					// 	Epoch:   b.Epoch,
-					// }
-					// c.Transimtor.ConnectRecvChannel() <- msg
-					// c.CommitEpoch = b.Epoch + 1
 				}
-				//如果这个值获得了finish那么直接commit并且帮助别人commit  要不要加一个commitflag呢？
-
 				logger.Debug.Printf("help commit message leader %d epoch %d \n", leaderid, epoch)
 				help, _ := NewHelpCommit(c.Name, leaderid, epoch, b, c.SigService)
 				c.Transimtor.Send(c.Name, core.NONE, help)
-				c.Transimtor.RecvChannel() <- help //不用发给自己
-				//进入下一个epoch
-				//c.advanceNextEpoch(epoch + 1)
 			} else {
 				logger.Debug.Printf("Processing retriever epoch %d \n", epoch) //这个部分真的实现了吗
 			}
@@ -491,6 +479,31 @@ func (c *Core) processLeader(epoch int64) error {
 			}
 		}
 	}
+
+	//如果发现都已经skip掉了前一项，那么现在就可以直接提交finish的这一项
+	if c.judgeCommit(epoch, index) {
+		if check1, value1 := c.hasFinish(epoch, leaderid); check1 {
+			logger.Debug.Printf("Processing Leader for epoch %d and leader %d has finish and can commit\n", epoch, leaderid)
+			if b1, err1 := c.getConsensusBlock(value1); err1 != nil {
+				return err1
+			} else if b1 != nil {
+				if ok1 := c.verifyConsensusBlock(b1); !ok1 {
+					logger.Error.Printf("checkreferrence error and try to retriver Author %d Epoch %d lenof Reference %d\n", b1.Proposer, b1.Epoch, len(b1.PayLoads))
+					c.BlocksWaitforCommit[b1.Epoch] = b1
+					return nil
+				} else {
+					c.BlocksWaitforCommit[b1.Epoch] = b1
+					c.CommitAllBlocks()
+				}
+				logger.Debug.Printf("help commit message leader %d epoch %d \n", leaderid, epoch)
+				help, _ := NewHelpCommit(c.Name, leaderid, epoch, b1, c.SigService)
+				c.Transimtor.Send(c.Name, core.NONE, help)
+			} else {
+				logger.Debug.Printf("Processing retriever epoch %d \n", epoch)
+			}
+		}
+	}
+
 	logger.Debug.Printf("Processing Leader epoch %d index %d Leader %d\n", epoch, index, c.Elector.GetLeader(epoch, index))
 	return nil
 }

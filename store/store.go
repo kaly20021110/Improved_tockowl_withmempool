@@ -57,6 +57,7 @@ func NewStore(db DB) *Store {
 				{
 					//req.err = store.WRITE(req.key, req.val)
 					req.err = s.db.Put(req.key, req.val)
+					req.Done <- req
 					//写进去并且唤醒所有正在等待的人
 					if queue, ok := pending[string(req.key)]; ok { //如果有等待的队列消息
 						for _, r := range queue {
@@ -65,7 +66,7 @@ func NewStore(db DB) *Store {
 						}
 						delete(pending, string(req.key))
 					}
-					req.Done <- req
+
 				}
 			case NOTIFYREAD:
 				{

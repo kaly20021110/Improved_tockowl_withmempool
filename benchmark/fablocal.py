@@ -1,7 +1,7 @@
 import subprocess
 import time
 
-for i in range(20):
+for i in range(10):
     print(f"\n[执行第 {i + 1} 次] fab local")
     try:
         result = subprocess.run(["fab", "local"], capture_output=True, text=True, check=True)

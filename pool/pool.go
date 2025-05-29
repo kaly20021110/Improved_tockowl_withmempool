@@ -69,8 +69,8 @@ func (q *txQueue) make() {
 		batch.Txs = append(batch.Txs, q.queue[q.rind])
 		q.nums--
 	}
-	//test set
-	batch.Txs = nil
+	//test set   假设不考虑发块的延迟，只考虑传输延迟
+	//batch.Txs = nil
 	q.batchChannel <- batch
 }
 
@@ -170,4 +170,8 @@ func (p *Pool) Run() {
 
 func (p *Pool) GetBatch() Batch {
 	return p.queue.get()
+}
+
+func (p *Pool) BatchChannel() chan Batch {
+	return p.batchChannel
 }

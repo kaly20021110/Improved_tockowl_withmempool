@@ -98,7 +98,7 @@ func (r *RequestBlockMsg) Module() string {
 }
 
 type MakeConsensusBlockMsg struct {
-	MaxBlockSize uint64 //一个共识区块包含的最大微小区块的数量
+	MaxBlockSize int //一个共识区块包含的最大微小区块的数量
 	Blocks       chan []crypto.Digest
 }
 

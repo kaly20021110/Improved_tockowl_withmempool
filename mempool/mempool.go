@@ -6,7 +6,6 @@ import (
 	"bft/mvba/logger"
 	"bft/mvba/pool"
 	"bft/mvba/store"
-	"time"
 )
 
 type Mempool struct {
@@ -107,6 +106,7 @@ func (m *Mempool) HandleOwnBlock(block *OwnBlockMsg) error {
 
 func (m *Mempool) HandleOthorBlock(block *OtherBlockMsg) error {
 	//m.generateBlocks()
+	logger.Info.Printf("receive other blocks from author %d batchID is %d\n", block.Block.Proposer, block.Block.Batch.ID)
 	//logger.Debug.Printf("handle mempool otherBlockMsg\n")
 	if uint64(len(m.Queue)) >= m.Parameters.MaxMempoolQueenSize {
 		logger.Error.Printf("ErrFullMemory\n")
@@ -127,6 +127,7 @@ func (m *Mempool) HandleOthorBlock(block *OtherBlockMsg) error {
 		return err
 	}
 	m.Queue[digest] = struct{}{}
+	//logger.Info.Printf("receive other blocks length is %d\n")
 	return nil
 }
 
@@ -139,8 +140,8 @@ func (m *Mempool) HandleRequestBlock(request *RequestBlockMsg) error {
 			message := &OtherBlockMsg{
 				Block: b,
 			}
-			//m.Transimtor.Send(m.Name, request.Author, message) //只发给向自己要的人
-			m.Transimtor.Send(m.Name, core.NONE, message) //发给所有人
+			m.Transimtor.Send(m.Name, request.Author, message) //只发给向自己要的人
+			//m.Transimtor.Send(m.Name, core.NONE, message) //发给所有人
 		}
 	}
 	return nil
@@ -194,8 +195,8 @@ func (m *Mempool) HandleVerifyMsg(msg *VerifyBlockMsg) VerifyStatus {
 	return m.Sync.Verify(msg.Proposer, msg.Epoch, msg.Payloads, msg.ConsensusBlockHash)
 }
 
-func (m *Mempool) generateBlocks() error {
-	block, _ := NewBlock(m.Name, m.TxPool.GetBatch(), m.SigService)
+func (m *Mempool) generateBlocks(batch pool.Batch) error {
+	block, _ := NewBlock(m.Name, batch, m.SigService)
 	if block.Batch.ID != -1 {
 		logger.Info.Printf("create Block node %d batch_id %d \n", block.Proposer, block.Batch.ID)
 		ownmessage := &OwnBlockMsg{
@@ -208,21 +209,18 @@ func (m *Mempool) generateBlocks() error {
 
 func (m *Mempool) Run() {
 	//一直广播微区块
-	ticker := time.NewTicker(1000 * time.Microsecond)
-	defer ticker.Stop()
-	m.generateBlocks()
 
 	go m.Sync.Run()
 
 	//监听mempool的消息通道
 	mempoolrecvChannal := m.Transimtor.MempololRecvChannel()
 	connectrecvChannal := m.Transimtor.ConnectRecvChannel()
+	batchChannal := m.TxPool.BatchChannel()
 	for {
 		var err error
 		select {
-		case <-ticker.C:
-			logger.Debug.Printf("ticker triggered at %s", time.Now().Format(time.RFC3339Nano))
-			err = m.generateBlocks()
+		case batch := <-batchChannal:
+			err = m.generateBlocks(batch)
 		case msg := <-connectrecvChannal:
 			{
 				switch msg.MsgType() {
