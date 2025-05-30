@@ -66,7 +66,7 @@ func (s *Sender) connect(addr string) (chan<- Messgae, error) {
 			if err := cc.Write(msg); err != nil {
 				logger.Warn.Printf("Failed to send message to %s: %v \n", addr, err)
 			} else {
-				//logger.Debug.Printf("Successfully sent message to %s \n", addr)
+				logger.Warn.Printf("Successfully sent message to %s \n", addr)
 			}
 		}
 	}()

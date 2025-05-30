@@ -23,8 +23,8 @@ func NewCodec(Consensustypes map[int]reflect.Type, Mempooltypes map[int]reflect.
 	for k, v := range Consensustypes {
 		DefaultMessageTypeMap[k] = v
 	}
-	for k, v := range Mempooltypes {
-		DefaultMessageTypeMap[k] = v
+	for k1, v1 := range Mempooltypes {
+		DefaultMessageTypeMap[k1] = v1
 	}
 	return &Codec{
 		types: DefaultMessageTypeMap,
@@ -42,12 +42,13 @@ func (cc *Codec) Bind(conn io.ReadWriter) *Codec {
 
 func (cc *Codec) Write(msg Messgae) error {
 	typeId := msg.MsgType()
+
 	if err := cc.encoder.Encode(typeId); err != nil {
-		logger.Error.Printf("Codec encode typeId error: %v \n", err)
+		logger.Error.Printf("Codec encode typeId  %d error: %v \n", typeId, err)
 		return err
 	}
 	if err := cc.encoder.Encode(msg); err != nil {
-		logger.Error.Printf("Codec encode msg error: %v \n", err)
+		logger.Error.Printf("Codec encode msg module %s error: %v \n", msg.Module(), err)
 		return err
 	}
 	return nil

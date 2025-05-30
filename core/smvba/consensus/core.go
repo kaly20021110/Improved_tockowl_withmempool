@@ -55,7 +55,7 @@ func NewCore(
 	callBack chan<- struct{},
 ) *Core {
 	loopBackchannel := make(chan crypto.Digest)
-	Sync := mempool.NewSynchronizer(Name, Transimtor, loopBackchannel, Store)
+	Sync := mempool.NewSynchronizer(Name, Transimtor, loopBackchannel, Parameters, Store)
 	pool := mempool.NewMempool(Name, Committee, Parameters, SigService, Store, TxPool, Transimtor, Sync)
 	c := &Core{
 		Name:                Name,
@@ -225,7 +225,7 @@ func (c *Core) getABAStopInstance(epoch int64) (int, core.NodeID) {
 func (c *Core) generatorBlock(epoch int64) *ConsensusBlock {
 	referencechan := make(chan []crypto.Digest)
 	msg := &mempool.MakeConsensusBlockMsg{
-		MaxBlockSize: c.Parameters.PayloadSize, Blocks: referencechan,
+		MaxBlockSize: c.Parameters.MaxPayloadSize, Blocks: referencechan,
 	}
 	c.Transimtor.ConnectRecvChannel() <- msg
 	payloads := <-referencechan

@@ -5,8 +5,8 @@ from benchmark.commands import CommandMaker
 from benchmark.local import LocalBench
 from benchmark.logs import ParseError, LogParser
 from benchmark.utils import BenchError,Print
-from aws.instance import InstanceManager
-from aws.remote import Bench
+from alibaba.instance import InstanceManager
+from alibaba.remote import Bench
 
 @task
 def local(ctx):
@@ -24,7 +24,7 @@ def local(ctx):
             # "rate": 1_000,              # ignore: tx send rate 
             "tx_size": 250,               # tx size
             # "batch_size": 200,          # ignore: the max number of tx that can be hold 
-            "max_queue_size": 10_000 
+            "max_tx_queue_size": 10_000 
 	    },
         "consensus": {
             "sync_timeout": 500,        # node sync time
@@ -34,8 +34,10 @@ def local(ctx):
             "faults": 0,                # the number of byzantine node
             "retry_delay": 5_000,       # request block period
             'protocol': "sMVBA",
-            'maxmempoolqueensize': 10_000,
-            'payload_size': 500
+            "max_payload_size": 1_000,
+            "max_queen_size": 10_000,
+            "min_Payload_delay": 0,
+            "sync_retry_delay": 10_000
         }
     }
     try:
@@ -45,7 +47,7 @@ def local(ctx):
         Print.error(e)
 
 @task
-def create(ctx, nodes=2):
+def create(ctx, nodes=1):
     ''' Create a testbed'''
     try:
         InstanceManager.make().create_instances(nodes)
@@ -110,13 +112,13 @@ def info(ctx):
 def remote(ctx):
     ''' Run benchmarks on AWS '''
     bench_params = {
-        'nodes': [7],
+        'nodes': [4],
         'node_instance': 1,               # the number of running instance for a node  (max = 4)
         'duration': 40,
         'rate': 3_000,                    # tx send rate
-        'batch_size': [ 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536],              # the max number of tx that can be hold 
-        'log_level': 0b0001,              # 0x1 infolevel 0x2 debuglevel 0x4 warnlevel 0x8 errorlevel
-        'protocol': "vaba",
+        'batch_size': [256],              # the max number of tx that can be hold 
+        'log_level': 0b1111,              # 0x1 infolevel 0x2 debuglevel 0x4 warnlevel 0x8 errorlevel
+        'protocol': "sMVBA",
         'runs': 1
     }
     node_params = {
@@ -124,16 +126,22 @@ def remote(ctx):
             # "rate": 1_000,              # ignore: tx send rate 
             "tx_size": 256,               # tx size
             # "batch_size": 200,          # ignore: the max number of tx that can be hold 
-            "max_queue_size": 10_000 
+            "max_tx_queue_size": 10_000 
 	    },
         "consensus": {
             "sync_timeout": 1_000,      # node sync time
             "network_delay": 2_000,     # network delay
             "min_block_delay": 0,       # send block delay
             "ddos": False,              # DDOS attack
-            "faults": 2,                # the number of byzantine node
+            "faults": 0,                # the number of byzantine node
             "retry_delay": 5_000,        # request block period
-            'protocol': "sMVBA"
+            'protocol': "sMVBA",
+            'maxmempoolqueensize': 100_000,
+            'payload_size': 500,
+            "max_payload_size": 1_000,
+            "max_queen_size": 10_000,
+            "min_Payload_delay": 0,
+            "sync_retry_delay": 1_000
         }
     }
     try:

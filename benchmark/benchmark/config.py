@@ -80,8 +80,12 @@ class NodeParameters:
             inputs += [json['consensus']['faults']]
             inputs += [json['consensus']['retry_delay']]
             inputs += [json['consensus']['protocol']]
+            inputs += [json['consensus']['max_payload_size']]
+            inputs += [json['consensus']['max_queen_size']]
+            inputs += [json['consensus']['min_Payload_delay']]
+            inputs += [json['consensus']['sync_retry_delay']]
             inputs += [json['pool']['tx_size']]
-            inputs += [json['pool']['max_queue_size']]
+            inputs += [json['pool']['max_tx_queue_size']]
             
         except KeyError as e:
             raise ConfigError(f'Malformed parameters: missing key {e}')

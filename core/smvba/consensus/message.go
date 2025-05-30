@@ -685,12 +685,12 @@ const (
 	ElectShareType
 	HaltType
 	HelpSkipType
-	HelpCommitType
 	PrepareType
 	ABAValType
 	ABAMuxType
 	CoinShareType
 	ABAHaltType
+	HelpCommitType
 )
 
 var DefaultMessageTypeMap = map[int]reflect.Type{

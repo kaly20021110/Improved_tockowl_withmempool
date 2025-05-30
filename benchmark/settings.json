@@ -1,7 +1,7 @@
 {
     "key": {
-        "name": "dcz",
-        "path": "/root/.ssh/id_rsa",
+        "name": "tockowl",
+        "path": "/root/.ssh/Aliyun",
         "accesskey": "/root/.aliyun/access.json"
     },
     "ports": {
@@ -11,7 +11,7 @@
         "type": "ecs.g6e.xlarge",
         "regions": [
             "eu-central-1",
-            "ap-northeast-2",
+            "eu-west-1",
             "ap-southeast-1",
             "us-east-1"
         ]

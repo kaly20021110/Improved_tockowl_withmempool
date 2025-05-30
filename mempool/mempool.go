@@ -76,7 +76,7 @@ func (c *Mempool) GetBlock(digest crypto.Digest) (*Block, error) {
 
 func (m *Mempool) payloadProcess(block *Block) error {
 
-	if uint64(len(m.Queue)) >= m.Parameters.MaxMempoolQueenSize {
+	if uint64(len(m.Queue)) >= m.Parameters.MaxQueenSize {
 		return core.ErrFullMemory(m.Name)
 	}
 	//本地存储
@@ -93,7 +93,7 @@ func (m *Mempool) payloadProcess(block *Block) error {
 
 func (m *Mempool) HandleOwnBlock(block *OwnBlockMsg) error {
 	//logger.Debug.Printf("handle mempool OwnBlockMsg\n")  自己的值先不加入自己的内存池队列，给一个缓冲的时间，尽量减少去要payload的时间
-	if uint64(len(m.Queue)) >= m.Parameters.MaxMempoolQueenSize {
+	if uint64(len(m.Queue)) >= m.Parameters.MaxQueenSize {
 		return core.ErrFullMemory(m.Name)
 	}
 	digest := block.Block.Hash()
@@ -108,7 +108,7 @@ func (m *Mempool) HandleOthorBlock(block *OtherBlockMsg) error {
 	//m.generateBlocks()
 	logger.Info.Printf("receive other blocks from author %d batchID is %d\n", block.Block.Proposer, block.Block.Batch.ID)
 	//logger.Debug.Printf("handle mempool otherBlockMsg\n")
-	if uint64(len(m.Queue)) >= m.Parameters.MaxMempoolQueenSize {
+	if uint64(len(m.Queue)) >= m.Parameters.MaxQueenSize {
 		logger.Error.Printf("ErrFullMemory\n")
 		return core.ErrFullMemory(m.Name)
 	}

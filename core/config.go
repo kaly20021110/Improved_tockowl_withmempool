@@ -10,27 +10,33 @@ const (
 )
 
 type Parameters struct {
-	SyncTimeout         int    `json:"sync_timeout"`
-	NetwrokDelay        int    `json:"network_delay"`
-	MinBlockDelay       int    `json:"min_block_delay"`
-	DDos                bool   `json:"ddos"`
-	Faults              int    `json:"faults"`
-	RetryDelay          int    `json:"retry_delay"`
-	Protocol            int    `json:"protocol"`
-	MaxMempoolQueenSize uint64 `json:"maxmempoolqueensize"`
-	PayloadSize         int    `json:"payload_size"`
+	SyncTimeout   int  `json:"sync_timeout"`
+	NetwrokDelay  int  `json:"network_delay"`
+	MinBlockDelay int  `json:"min_block_delay"`
+	DDos          bool `json:"ddos"`
+	Faults        int  `json:"faults"`
+	RetryDelay    int  `json:"retry_delay"`
+	Protocol      int  `json:"protocol"`
+	// mempool
+	MaxPayloadSize  int    `json:"max_payload_size"`  // the max size of payloads that a block can involve
+	MaxQueenSize    uint64 `json:"max_queen_size"`    // the max length of the mmepool queue
+	MinPayloadDelay int    `json:"min_Payload_delay"` // the time broadcast payload interval ms
+	SyncRetryDelay  int    `json:"sync_retry_delay"`  // retry request time ms
 }
 
 var DefaultParameters = Parameters{
-	SyncTimeout:         500,
-	NetwrokDelay:        2_000,
-	MinBlockDelay:       0,
-	DDos:                false,
-	Faults:              0,
-	RetryDelay:          5_000,
-	Protocol:            SMVBA,
-	MaxMempoolQueenSize: 10_000,
-	PayloadSize:         500,
+	SyncTimeout:   500,
+	NetwrokDelay:  2_000,
+	MinBlockDelay: 0,
+	DDos:          false,
+	Faults:        0,
+	RetryDelay:    5_000,
+	Protocol:      SMVBA,
+	// mempool
+	MaxPayloadSize:  1_000,
+	MaxQueenSize:    10_000,
+	MinPayloadDelay: 200,    //ms
+	SyncRetryDelay:  10_000, //ms
 }
 
 type NodeID int

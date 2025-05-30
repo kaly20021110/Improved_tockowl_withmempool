@@ -158,7 +158,7 @@ class InstanceManager:
             instance_type = self.settings.instance_type,
             ostype = 'linux',
             architecture = 'x86_64',
-            image_family='acs:ubuntu_20_04_x64',
+            image_family='acs:ubuntu_22_04_x64',
             page_size=1,
             page_number=1
         )
